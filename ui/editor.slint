@@ -1,0 +1,148 @@
+import "fonts/IBMPlexSansJP-Regular.ttf";
+
+import { Styles } from "styles.slint";
+
+import {
+    VerticalBox, 
+    HorizontalBox, 
+    Button,
+    ScrollView
+} from "std-widgets.slint";
+
+
+export component TextEditor inherits Window {
+    title: file_path;
+    in-out property<string> document_title: "Untitled";
+    in-out property<string> document_content <=> content-input.text;
+    in-out property<string> file_path <=> path_input.text;
+    default-font-family: Styles.font-family;
+    default-font-size: Styles.sizes.font;
+    min-width: 400px;
+    min-height: 540px;
+    property <TextWrap> wrap: no-wrap;
+    in-out property <int> line-count: 1;
+    out property <int> size: document_content.character-count;
+  
+    callback open_file();
+    callback save_file();
+    callback count_lines();
+  
+    forward-focus: global-shortcut-handler;
+  
+    function custom-shortcuts(event: KeyEvent) -> EventResult {
+        // Ctrl+O: Open file
+        if event.modifiers.control && (event.text == "o") {
+            root.open_file();
+            return EventResult.accept;
+        // Ctrl+S: Save file
+        } else if event.modifiers.control && (event.text == "s") {
+            root.save_file();
+            return EventResult.accept;
+        // Toggle wrap text
+        } else if event.modifiers.alt && (event.text == "z") {
+            root.wrap = root.wrap == TextWrap.word-wrap ? TextWrap.no-wrap : TextWrap.word-wrap;
+            return EventResult.accept;
+        }
+        
+        return EventResult.reject;
+    }
+    // Keyboard shortcuts: Ctrl+O (open) and Ctrl+S (save)
+    global-shortcut-handler := FocusScope {    
+        key-pressed(event) => {
+            return root.custom-shortcuts(event);
+        }
+    }
+  
+    HorizontalLayout {
+      spacing: 0;
+      padding: 0;
+      
+      // メインの編集 UI
+      VerticalBox {
+          spacing: 5px;
+          padding: 10px;
+  
+          path-input := TextInput {
+              padding: 0;
+              font-size: Styles.sizes.font;
+              wrap: word-wrap;
+              font-weight: 600;
+              horizontal-alignment: left;
+              input-type: text;
+              read-only: false;
+              selection-background-color: #000000;
+  
+              key-pressed(event) => {
+                  return root.custom-shortcuts(event);
+              }
+          }
+  
+          Rectangle {
+            width: 100%;
+            height: 2px;
+            background: #818181;
+          }
+  
+          ScrollView {
+          HorizontalLayout {
+              spacing: 0;
+              padding: 0;
+              
+              // 行番号表示エリア
+              line-numbers := Rectangle {
+                  width: 50px;
+                  background: #f5f5f5;
+                  
+                  VerticalLayout {
+                      spacing: 0;
+                      padding-top: 0px;
+                      padding-right: 5px;
+                      alignment: start;
+                      
+                      for line in root.line-count: Text {
+                          text: (line + 1) + "";
+                          font-size: Styles.sizes.font;
+                          color: #888;
+                          horizontal-alignment: right;
+                          vertical-alignment: top;
+                      }
+                  }
+              }
+              
+              // テキストエディタ
+              editor-container := Rectangle {
+                  content-input := TextInput {
+                      x: 0;
+                      y: 0;
+                      width: 100%;
+                      height: 100%;
+                      padding: 5px;
+                      font-size: Styles.sizes.font;
+                      wrap: root.wrap;
+                      single-line: false;
+  
+                      key-pressed(event) => {
+                          return root.custom-shortcuts(event);
+                      }
+
+                      changed text => {count_lines();} // Update line count on text change
+                  }
+              }
+            }
+          }
+        }
+    }
+  
+    Rectangle {
+      x: 0px;
+      y: 0px;
+      height: 20px;
+      
+      status-text := Text {
+        width: 100%;
+        horizontal-alignment: right;
+        text: root.size + ".";
+      }
+  
+    }
+  }

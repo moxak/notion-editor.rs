@@ -1,0 +1,328 @@
+import "fonts/IBMPlexSansJP-Regular.ttf";
+import { Styles } from "styles.slint";
+import {
+    VerticalBox, 
+    HorizontalBox, 
+    Button,
+    ScrollView,
+    ListView,
+    LineEdit,
+    GroupBox
+} from "std-widgets.slint";
+
+export struct DatabaseListItem {
+    id: string,
+    title: string,
+}
+
+export struct PageListItem {
+    id: string,
+    title: string,
+}
+
+export component NotionEditor inherits Window {
+    title: "Notion Editor";
+    in-out property<string> document-title: "Untitled";
+    in-out property<string> document-content <=> content-input.text;
+    in-out property<string> status-message <=> status-text.text;
+    in-out property<bool> connected: false;
+    
+    default-font-family: Styles.font-family;
+    default-font-size: Styles.sizes.font;
+    min-width: 800px;
+    min-height: 600px;
+    property <TextWrap> wrap: no-wrap;
+    in-out property <int> line-count: 1;
+    
+    // Model data for database and page lists
+    in-out property <[DatabaseListItem]> databases;
+    in-out property <[PageListItem]> pages;
+    
+    callback set-token(string);
+    callback list-databases();
+    callback select-database(string);
+    callback select-page(string);
+    callback save-content();
+    callback open-file();
+    callback save-file();
+    callback count-lines();
+    
+    forward-focus: global-shortcut-handler;
+    
+    function custom-shortcuts(event: KeyEvent) -> EventResult {
+        // Ctrl+S: Save content to Notion
+        if event.modifiers.control && (event.text == "s") {
+            root.save-content();
+            return EventResult.accept;
+        // Ctrl+O: Open local file
+        } else if event.modifiers.control && (event.text == "o") {
+            root.open-file();
+            return EventResult.accept;
+        // Ctrl+L: Save to local file
+        } else if event.modifiers.control && (event.text == "l") {
+            root.save-file();
+            return EventResult.accept;
+        // Toggle wrap text
+        } else if event.modifiers.alt && (event.text == "z") {
+            root.wrap = root.wrap == TextWrap.word-wrap ? TextWrap.no-wrap : TextWrap.word-wrap;
+            return EventResult.accept;
+        }
+        
+        return EventResult.reject;
+    }
+    
+    // Keyboard shortcuts
+    global-shortcut-handler := FocusScope {    
+        key-pressed(event) => {
+            return root.custom-shortcuts(event);
+        }
+    }
+  
+    HorizontalLayout {
+        spacing: 0;
+        padding: 0;
+        
+        // Sidebar for Notion navigation
+        VerticalBox {
+            width: 250px;
+            spacing: 5px;
+            padding: 10px;
+            // background: Styles.palette.window-alter-bg;
+            
+            GroupBox {
+                title: "Notion API";
+                vertical-stretch: 0;
+                
+                VerticalLayout {
+                    spacing: 5px;
+                    
+                    HorizontalLayout {
+                        spacing: 5px;
+                        
+                        token-input := LineEdit {
+                            placeholder-text: "Enter Notion API Token";
+                            horizontal-stretch: 1;
+                            // password: true;
+                        }
+                        
+                        Button {
+                            text: "Set";
+                            clicked => {
+                                root.set-token(token-input.text);
+                            }
+                        }
+                    }
+                    
+                    HorizontalLayout {
+                        Button {
+                            text: "List Databases";
+                            enabled: root.connected;
+                            clicked => { root.list-databases(); }
+                        }
+                        
+                        Rectangle {
+                            width: 10px;
+                        }
+                        
+                        Text {
+                            text: root.connected ? "Connected" : "Not Connected";
+                            color: root.connected ? #00c853 : #ff3d00;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+            
+            // Databases list
+            GroupBox {
+                title: "Databases";
+                vertical-stretch: 1;
+                
+                databases-list := ListView {
+                    for database in root.databases: Rectangle {
+                        height: 30px;
+                        
+                        HorizontalLayout {
+                            Text {
+                                text: database.title;
+                                vertical-alignment: center;
+                            }
+                        }
+                        
+                        TouchArea {
+                            clicked => {
+                                root.select-database(database.id);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Pages list
+            GroupBox {
+                title: "Pages";
+                vertical-stretch: 1;
+                
+                pages-list := ListView {
+                    for page in root.pages: Rectangle {
+                        height: 30px;
+                        
+                        HorizontalLayout {
+                            Text {
+                                text: page.title;
+                                vertical-alignment: center;
+                            }
+                        }
+                        
+                        TouchArea {
+                            clicked => {
+                                root.select-page(page.id);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // File operations
+            GroupBox {
+                title: "File Operations";
+                vertical-stretch: 0;
+                
+                VerticalLayout {
+                    spacing: 5px;
+                    
+                    Button {
+                        text: "Open Local File";
+                        clicked => { root.open-file(); }
+                    }
+                    
+                    Button {
+                        text: "Save to Local File";
+                        clicked => { root.save-file(); }
+                    }
+                }
+            }
+            
+            // Save to Notion button
+            Button {
+                text: "Save to Notion";
+                enabled: root.connected;
+                clicked => { root.save-content(); }
+            }
+        }
+        
+        // Main editor area
+        VerticalBox {
+            spacing: 5px;
+            padding: 10px;
+            horizontal-stretch: 1;
+            
+            // Title bar
+            Rectangle {
+                height: 30px;
+                
+                HorizontalLayout {
+                    Text {
+                        text: root.document-title;
+                        font-size: Styles.sizes.font * 1.2;
+                        font-weight: 600;
+                        vertical-alignment: center;
+                    }
+                    
+                    Rectangle { horizontal-stretch: 1; }
+                    
+                    Text {
+                        text: "Line wrap: " + (root.wrap == TextWrap.word-wrap ? "On" : "Off") 
+                              + " (Alt+Z to toggle)";
+                        vertical-alignment: center;
+                        font-size: Styles.sizes.font * 0.8;
+                        color: #888;
+                    }
+                }
+            }
+            
+            // Separator
+            Rectangle {
+                height: 2px;
+                background: #818181;
+            }
+            
+            // Editor area
+            ScrollView {
+                vertical-stretch: 1;
+                
+                HorizontalLayout {
+                    spacing: 0;
+                    padding: 0;
+                    
+                    // Line numbers
+                    line-numbers := Rectangle {
+                        width: 50px;
+                        background: #f5f5f5;
+                        
+                        VerticalLayout {
+                            spacing: 0;
+                            padding-top: 0px;
+                            padding-right: 5px;
+                            alignment: start;
+                            
+                            for line in root.line-count: Text {
+                                text: (line + 1) + "";
+                                font-size: Styles.sizes.font;
+                                color: #888;
+                                horizontal-alignment: right;
+                                vertical-alignment: top;
+                            }
+                        }
+                    }
+                    
+                    // Text editor
+                    editor-container := Rectangle {
+                        content-input := TextInput {
+                            x: 0;
+                            y: 0;
+                            width: 100%;
+                            height: 100%;
+                            padding: 5px;
+                            font-size: Styles.sizes.font;
+                            wrap: root.wrap;
+                            single-line: false;
+                            
+                            key-pressed(event) => {
+                                return root.custom-shortcuts(event);
+                            }
+                            
+                            edited => { root.count-lines(); }
+                        }
+                    }
+                }
+            }
+            
+            // Status bar
+            Rectangle {
+                height: 25px;
+                background: Styles.palette.window-alter-bg;
+                
+                HorizontalLayout {
+                    padding: 5px;
+                    
+                    status-text := Text {
+                        text: "Ready";
+                        vertical-alignment: center;
+                        horizontal-alignment: left;
+                        font-size: Styles.sizes.font * 0.9;
+                    }
+                    
+                    Rectangle { horizontal-stretch: 1; }
+                    
+                    Text {
+                        text: "Lines: " + root.line-count;
+                        vertical-alignment: center;
+                        horizontal-alignment: right;
+                        font-size: Styles.sizes.font * 0.9;
+                    }
+                }
+            }
+        }
+    }
+}
